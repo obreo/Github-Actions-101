@@ -34,7 +34,7 @@ Terraform has two main elements:
 1. Provider configurations: which defines your log credintials and cloud service provider (CSP).
 2. Resources: Any resource you want to deploy on the cloud.
 
-Starting with the Provider:
+### Starting with the Provider:
 1. Create a `main.tf` file - you may call it anything else.
 2. One file is enough to include both of the provider settings and the resources. But for a better management and readability we will sepcify this for the provider settings only.
 3. This is what it containers:
@@ -48,7 +48,7 @@ terraform {
     region = "AWS_REGION"
   }
   
-  required_providers {
+  required_providers {                                 # This assigns the aws library
     aws = {
       source  = "hashicorp/aws"
       version = "~> 4.0"
@@ -57,7 +57,7 @@ terraform {
   required_version = ">= 0.14.0"
 }
 
-# Provider's configuration
+# Provider's configuration                            # This is to set up the configuration for the Terraform deployment
 provider "aws" {
   region = "us-east-1"
 }
@@ -73,7 +73,7 @@ To use the Terraform Cloud as a backend, add replace the content in the `Terrafo
 ```
    backend "remote" {
     # The name of your Terraform Cloud organization.
-    organization = "ORG_NAME"
+    organization = "ORGNIZATION_NAME"
 
     # The name of the Terraform Cloud workspace to store Terraform state files in.
     workspaces {
@@ -83,3 +83,101 @@ To use the Terraform Cloud as a backend, add replace the content in the `Terrafo
 
 
 ```
+However, this requires to set up the Terraform Cloud and connect it to the github repository. You can refer to the Terraform Cloud [Docs](https://developer.hashicorp.com/terraform/cloud-docs)
+#### Setting up your resources:
+
+This is a script that creates an EC2 instance saved in `instance.tf` file :
+```
+# Instance
+resource "aws_instance" "Instance" {
+  ami                         = "ami-0b5eea76982371e91"
+  instance_type               = "t2.micro"
+  associate_public_ip_address = "true"
+  root_block_device {
+    volume_size = "8"
+  }
+  key_name  = ""                        # Add your keypair name here
+  count     = 1
+  user_data = <<-EOF
+    #!/bin/bash
+    sudo yum update
+    sudo yum install httpd -y
+    sudo service httpd start
+    sudo service httpd enable
+    sudo echo "This was created using Terraform" >> /var/www/html/index.html
+    EOF
+
+  tags = {
+    Name = "EC2 Instance"
+  }
+}
+
+
+```
+#### Step #2: Preparing the Terraform workflow:
+1. Create a repository and push the files created to it.
+2. We'll use an already Terraform workflow config available from Github by selecting the ` Actions > New Workflow > Search for Terraform `. Click on configure > commit changes.
+3. Now the file is saved on your repository with the following directory `/.github/workflows/terraform.yaml`
+4. We'll edit the file to suit our setup, you can edit the script from github or clone the repository and replace the script with the following:
+```
+name: 'Terraform'                             # Workflow Name
+
+on:                                           # It triggers the workflow when a push or pull event occurs to the repository
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+permissions:
+  contents: read                              # Giving permissions to the workflow to read only
+
+jobs:                                         # Here you can set multiple jobs, each job will do a task and they all run in parallel as soon as the content is retrieved.
+  terraform:                                  
+    name: 'Terraform'                         # Job-1, use ubuntu
+    runs-on: ubuntu-latest          
+    env:                                      # These are the AWS credintials, you need to register them in the github secrets from the repo settings. The credintials are extraced from AWS IAM.
+      AWS_ACCESS_KEY_ID: ${{secrets.AWS_ACCESS_KEY_ID}}
+      AWS_SECRET_ACCESS_KEY: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+      AWS_REGION: "us-east-1"
+
+    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:                                    # These are actions done within a single job
+    # Checkout the repository to the GitHub Actions runner.
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    # Install the latest version of Terraform CLI and configure the Terraform CLI configuration file with a Terraform Cloud user API token
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+      with:
+        cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}   # This is taken from your Terraform Cloud user API settings, save it in github secrets.
+
+    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+    - name: Terraform Init
+      run: terraform init
+
+    # Checks that all Terraform configuration files adhere to a canonical format
+    - name: Terraform Format
+      run: terraform fmt
+
+    # Generates an execution plan for Terraform
+    - name: Terraform Plan
+      run: terraform plan -input=false
+      env:
+        AWS_ACCESS_KEY_ID: ${{secrets.AWS_ACCESS_KEY_ID}}
+        AWS_SECRET_ACCESS_KEY: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+        AWS_REGION: "us-east-1"
+
+    - name: Terraform Apply
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: terraform apply -auto-approve -input=false
+      env:
+        AWS_ACCESS_KEY_ID: ${{secrets.AWS_ACCESS_KEY_ID}}
+        AWS_SECRET_ACCESS_KEY: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+        AWS_REGION: "us-east-1"
+
+```
+After you are done, push the files again if you edited the workflow locally then it shall start the workflow CICD process automatically. You can check the steps applied in terminal by viewing the actions tab and clicking on the workflow job.
