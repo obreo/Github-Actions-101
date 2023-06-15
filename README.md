@@ -251,7 +251,7 @@ Step #4: Edit the terraform workflow script by replacing the environment variabl
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
-        role-to-assume: arn:aws:iam::AWS_USER_ID:role/Github-auth-idp-role
+        role-to-assume: arn:aws:iam::AWS_USER_ID:role/ROLE
         role-session-name: ANYNAME
         aws-region: AWS_REGION
 ```
