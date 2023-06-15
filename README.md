@@ -7,7 +7,7 @@ Github Actions is a continous integration / continous deployment (CI/CD) tool, w
 
 ## How It Works
 
-unlike some CI/CD tools similar to jenkines, Github uses its own backend from virtual instances to run and deploy your code. Each run uses a temprary virtual machine, so if your appliation requires saving the changes - like Terraform - then you will need a "Backend" that will manage these changes at every Github actions deployment. 
+Unlike some CI/CD tools similar to Jenkins, Github uses its own backend from virtual instances to run and deploy your code. Each run uses a temprary virtual machine, so if your appliation requires saving the changes - like Terraform - then you will need a "Backend" that will manage these changes at every Github actions deployment. 
 
 This backend can be any cloud service that integrates with your application and the Github actions' intergation.
 
@@ -181,3 +181,68 @@ jobs:                                         # Here you can set multiple jobs, 
 
 ```
 After you are done, push the files again if you edited the workflow locally then it shall start the workflow CICD process automatically. You can check the steps applied in terminal by viewing the actions tab and clicking on the workflow job.
+
+## Best Security Practices
+
+The above method is relatively secured, but for the best practices we can deply the workflow with more security by using OpenID Connect (OIDC) instead of assigning the user secret's keys in Github. 
+
+To learn more, follown this [documentation](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services).
+
+### Step #1: Register the Identity provider in AWS cloud from the IAM > Identity providers
+
+- For the provider URL: Use https://token.actions.githubusercontent.com
+- For the "Audience": Use sts.amazonaws.com
+
+### Step #2: Create a policy that will allow the s3 bucket we assigned previously - so it allow terraform to read and write the output file - and any other policy you want to grant for the provider so the terraform can deploy the resource. In our case, we will create a policy for the EC2.
+
+1. S3:
+`S3 policy`
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::BUCKET_NAME/*",
+                "arn:aws:s3:::BUCKET_NAME"
+            ]
+        }
+    ]
+}
+```
+2. EC2 can be assigned using the AWS managed policies.
+
+Step #3: Create a trust policy role with the below code and assign the above policies to it.
+
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "Federated": "arn:aws:iam::YOUR_AWS_USER_ID:oidc-provider/token.actions.githubusercontent.com"  # This arn refers to the Identity provider you created.
+            },
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Condition": {
+                "StringEquals": {
+                    "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+                },
+                "StringLike": {
+                    "token.actions.githubusercontent.com:sub": "repo:GITHUB_USERNAME/GITHUB_REPOSITORY_NAME:*"
+                }
+            }
+        }
+    ]
+}
+
+```
+
+Step #4: 
