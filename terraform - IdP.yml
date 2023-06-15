@@ -44,11 +44,11 @@
 
 
 
-name: 'Terraform Destory'
+name: 'Terraform'
 
 on:
   push:
-    branches: [ "destroy" ]
+    branches: [ "main" ]
   pull_request:
      
 permissions:
@@ -73,7 +73,7 @@ jobs:
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
-        role-to-assume: arn:aws:iam::AWS_ID:role/Github-auth-idp-role
+        role-to-assume: arn:aws:iam::AWS_ID:ROLE
         role-session-name: NAME
         aws-region: REGION
 
