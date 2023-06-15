@@ -245,4 +245,14 @@ Step #3: Create a trust policy role with the below code and assign the above pol
 
 ```
 
-Step #4: 
+Step #4: Edit the terraform workflow script by replacing the environment variables after the checkout job with the new credintials:
+
+```
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        role-to-assume: arn:aws:iam::AWS_USER_ID:role/Github-auth-idp-role
+        role-session-name: ANYNAME
+        aws-region: AWS_REGION
+```
+Also remove the provider configurations from the main.tf
